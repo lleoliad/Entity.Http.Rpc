@@ -1,0 +1,42 @@
+name: NuGet Release
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  pack:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+
+      - name: Restore
+        run: dotnet restore Entity.Http.Rpc.csproj
+
+      - name: Build
+        run: dotnet build Entity.Http.Rpc.csproj -c Release -p:SignAssembly=false --no-restore
+
+      - name: Pack
+        run: dotnet pack Entity.Http.Rpc.csproj -c Release --no-build -p:SignAssembly=false -o ./artifacts
+
+      - name: Upload package artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget-package
+          path: ./artifacts/*.nupkg
+
+      - name: Publish to NuGet
+        if: startsWith(github.ref, 'refs/tags/v') && secrets.NUGET_API_KEY != ''
+        run: dotnet nuget push "./artifacts/*.nupkg" --api-key "${{ secrets.NUGET_API_KEY }}" --source https://api.nuget.org/v3/index.json --skip-duplicate

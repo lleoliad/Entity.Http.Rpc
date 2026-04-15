@@ -52,3 +52,31 @@ CodeCoverage/
 *.VisualState.xml
 TestResult.xml
 nunit-*.xml
+
+# Visual Studio / Rider / VS Code
+.vs/
+.vscode/
+.idea/
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+*.userprefs
+*.csproj.user
+
+# Debug symbols and IDE databases
+*.pdb
+*.mdb
+*.opendb
+*.VC.db
+*.pidb
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Tools
+Tools/
+
+# Codex
+AGENTS.md
