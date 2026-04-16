@@ -2,9 +2,7 @@ using Fantasy;
 using Fantasy.Async;
 using Fantasy.Event;
 using Fantasy.Network.HTTP;
-using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -70,7 +68,7 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             app.UseAuthorization();
         }
 
-        if (options.ResponseHeaders.Enabled && options.ResponseHeaders.Headers.Count > 0)
+        if (options.ResponseHeaders is { Enabled: true, Headers.Count: > 0 })
         {
             app.Use(async (context, next) =>
             {
