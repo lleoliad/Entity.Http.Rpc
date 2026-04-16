@@ -36,9 +36,21 @@
     </ItemGroup>
     
     <ItemGroup>
-        <!-- 包元数据文件 -->
+        <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.26" />
+        <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.17.0" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <!-- package metadata file -->
         <None Include="LICENSE" Pack="true" PackagePath="\" />
         <None Include="README.md" Pack="true" PackagePath="\" />
         <None Include="Assets/icon.png" Pack="true" PackagePath="\" Link="icon.png" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Remove="Tests\**\*.cs" />
+        <EmbeddedResource Remove="Tests\**\*" />
+        <None Remove="Tests\**\*" />
     </ItemGroup>
 </Project>
