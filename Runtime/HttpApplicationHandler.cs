@@ -89,6 +89,20 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
                 endpoint.AllowAnonymous();
             }
         }
+        
+        app.MapPost("/http/json/rpc", context => HandleJsonRpcRequestAsync(context, null));
+        app.MapPost("/http/json/rpc/{messageName}", context =>
+        {
+            var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
+            return HandleJsonRpcRequestAsync(context, routeMessageName);
+        });
+        
+        app.MapPost("/http/proto/rpc", context => HandleProtoRpcRequestAsync(context, null));
+        app.MapPost("/http/proto/rpc/{messageName}", context =>
+        {
+            var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
+            return HandleProtoRpcRequestAsync(context, routeMessageName);
+        });
 
         Log.Info($"[HTTP] HTTP RPC pipeline configured: Scene {self.Scene.SceneConfigId}, AuthEnabled={options.Auth.Enabled}, HealthChecksEnabled={options.HealthChecks.Enabled}");
 
@@ -100,5 +114,21 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         var duration = (DateTime.UtcNow - start).TotalMilliseconds;
         var ip = options.Observability.IncludeClientIp ? context.Connection.RemoteIpAddress?.ToString() : "hidden";
         Log.Info($"[HTTP-{traceId}] {context.Request.Method} {context.Request.Path} responded {context.Response.StatusCode} in {duration:F2}ms from {ip}");
+    }
+
+    private async Task HandleJsonRpcRequestAsync(HttpContext context, string? routeMessageName)
+    {
+        Log.Debug("[HTTP] HTTP Json RPC request started");
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsync("HTTP Json RPC response");
+        await FTask.CompletedTask;
+    }
+    
+    private async Task HandleProtoRpcRequestAsync(HttpContext context, string? routeMessageName)
+    {
+        Log.Debug("[HTTP] HTTP Proto RPC request started");
+        context.Response.StatusCode = StatusCodes.Status200OK;
+        await context.Response.WriteAsync("HTTP Proto RPC response");
+        await FTask.CompletedTask;
     }
 }

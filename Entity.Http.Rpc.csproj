@@ -53,4 +53,9 @@
         <EmbeddedResource Remove="Tests\**\*" />
         <None Remove="Tests\**\*" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Runtime\Json\" />
+      <Folder Include="Runtime\Proto\" />
+    </ItemGroup>
 </Project>
