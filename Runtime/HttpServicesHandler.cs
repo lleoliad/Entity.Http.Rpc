@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Http.Json;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Entities.Http.Rpc;
@@ -21,6 +22,10 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
     {
         var httpRpcOptions = BindOptions(self.Builder);
         self.Builder.Services.AddSingleton(httpRpcOptions);
+        self.Builder.Services.AddSingleton<HttpProtoReflectionBridge>();
+        self.Builder.Services.AddSingleton<HttpProtoSessionRegistry>();
+        self.Builder.Services.AddSingleton<HttpProtoMessageDispatcher>();
+        self.Builder.Services.AddHostedService<HttpProtoSessionCleanupService>();
         self.Builder.Services.AddOptions<HttpRpcOptions>()
             .Bind(self.Builder.Configuration.GetSection(HttpRpcOptions.SectionName))
             .Validate(configuration => HttpRpcOptionsValidator.Validate(configuration).Count == 0,

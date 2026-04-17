@@ -26,6 +26,7 @@ public static class HttpRpcOptionsValidator
             return errors;
         }
 
+        ValidateProto(options.Proto, errors);
         ValidateCors(options.Cors, errors);
         ValidateAuth(options.Auth, errors);
         ValidateObservability(options.Observability, errors);
@@ -60,6 +61,39 @@ public static class HttpRpcOptionsValidator
         if (options.AllowCredentials && options.AllowedOrigins.Any(origin => origin == "*" || string.Equals(origin, "all", StringComparison.OrdinalIgnoreCase)))
         {
             errors.Add("Cors.AllowCredentials cannot be enabled when Cors.AllowedOrigins contains a wildcard.");
+        }
+    }
+
+    private static void ValidateProto(HttpRpcProtoOptions options, ICollection<string> errors)
+    {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(options.SessionHeaderName))
+        {
+            errors.Add("Proto.SessionHeaderName is required when Proto.Enabled is enabled.");
+        }
+
+        if (options.SessionIdleTimeoutSeconds <= 0)
+        {
+            errors.Add("Proto.SessionIdleTimeoutSeconds must be greater than zero.");
+        }
+
+        if (options.SessionCleanupIntervalSeconds <= 0)
+        {
+            errors.Add("Proto.SessionCleanupIntervalSeconds must be greater than zero.");
+        }
+
+        if (options.InvalidSessionStatusCode is < 100 or > 999)
+        {
+            errors.Add("Proto.InvalidSessionStatusCode must be a valid HTTP status code.");
+        }
+
+        if (options.EmptyMessageStatusCode is < 100 or > 999)
+        {
+            errors.Add("Proto.EmptyMessageStatusCode must be a valid HTTP status code.");
         }
     }
 

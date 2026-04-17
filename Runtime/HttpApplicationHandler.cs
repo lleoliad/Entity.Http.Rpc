@@ -5,6 +5,7 @@ using Fantasy.Network.HTTP;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Primitives;
 
 namespace Entities.Http.Rpc;
 
@@ -126,9 +127,42 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
     
     private async Task HandleProtoRpcRequestAsync(HttpContext context, string? routeMessageName)
     {
-        Log.Debug("[HTTP] HTTP Proto RPC request started");
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsync("HTTP Proto RPC response");
+        var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
+        var sessionRegistry = context.RequestServices.GetRequiredService<HttpProtoSessionRegistry>();
+        var messageDispatcher = context.RequestServices.GetRequiredService<HttpProtoMessageDispatcher>();
+
+        if (!options.Proto.Enabled)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        try
+        {
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (!dispatchResult.HasResponse)
+            {
+                context.Response.StatusCode = options.Proto.EmptyMessageStatusCode;
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = "application/octet-stream";
+            await context.Response.BodyWriter.WriteAsync(dispatchResult.ResponseBody, context.RequestAborted);
+        }
+        catch (HttpProtoSessionException exception)
+        {
+            context.Response.StatusCode = exception.StatusCode;
+            await context.Response.WriteAsync(exception.Message, context.RequestAborted);
+        }
+        catch (InvalidOperationException exception)
+        {
+            context.Response.StatusCode = StatusCodes.Status400BadRequest;
+            await context.Response.WriteAsync(exception.Message, context.RequestAborted);
+        }
+
         await FTask.CompletedTask;
     }
 }

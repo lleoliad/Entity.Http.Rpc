@@ -53,4 +53,40 @@ public sealed class HttpRpcOptionsValidatorTests
 
         Assert.Contains(errors, message => message.Contains("Cors.AllowedOrigins"));
     }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Proto_Enabled_Without_Header_Name()
+    {
+        var options = new HttpRpcOptions
+        {
+            Proto =
+            {
+                Enabled = true,
+                SessionHeaderName = ""
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Proto.SessionHeaderName"));
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Proto_Timeouts_Are_Not_Positive()
+    {
+        var options = new HttpRpcOptions
+        {
+            Proto =
+            {
+                Enabled = true,
+                SessionIdleTimeoutSeconds = 0,
+                SessionCleanupIntervalSeconds = -1
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Proto.SessionIdleTimeoutSeconds"));
+        Assert.Contains(errors, message => message.Contains("Proto.SessionCleanupIntervalSeconds"));
+    }
 }

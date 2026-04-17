@@ -8,6 +8,7 @@ public sealed class HttpRpcOptions
     public const string CorsPolicyName = "EntityHttpRpcCors";
 
     public HttpRpcJsonOptions Json { get; set; } = new();
+    public HttpRpcProtoOptions Proto { get; set; } = new();
     public HttpRpcCorsOptions Cors { get; set; } = new();
     public HttpRpcAuthOptions Auth { get; set; } = new();
     public HttpRpcObservabilityOptions Observability { get; set; } = new();
@@ -23,6 +24,17 @@ public sealed class HttpRpcJsonOptions
     public bool WriteIndented { get; set; }
     public bool IgnoreNullValues { get; set; } = true;
     public bool SerializeEnumsAsStrings { get; set; } = true;
+}
+
+public sealed class HttpRpcProtoOptions
+{
+    public bool Enabled { get; set; } = true;
+    public string SessionHeaderName { get; set; } = "X-Session-Id";
+    public int SessionIdleTimeoutSeconds { get; set; } = 300;
+    public int SessionCleanupIntervalSeconds { get; set; } = 60;
+    public bool RequireExistingSession { get; set; }
+    public int InvalidSessionStatusCode { get; set; } = 401;
+    public int EmptyMessageStatusCode { get; set; } = 204;
 }
 
 public sealed class HttpRpcCorsOptions
