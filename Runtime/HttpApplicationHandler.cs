@@ -90,14 +90,14 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
                 endpoint.AllowAnonymous();
             }
         }
-        
+
         app.MapPost("/http/json/rpc", context => HandleJsonRpcRequestAsync(context, null));
         app.MapPost("/http/json/rpc/{messageName}", context =>
         {
             var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
             return HandleJsonRpcRequestAsync(context, routeMessageName);
         });
-        
+
         app.MapPost("/http/proto/rpc", context => HandleProtoRpcRequestAsync(context, null));
         app.MapPost("/http/proto/rpc/{messageName}", context =>
         {
@@ -124,7 +124,7 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         await context.Response.WriteAsync("HTTP Json RPC response");
         await FTask.CompletedTask;
     }
-    
+
     private async Task HandleProtoRpcRequestAsync(HttpContext context, string? routeMessageName)
     {
         var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
@@ -161,6 +161,11 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         {
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync(exception.Message, context.RequestAborted);
+        }
+        catch (Exception exception)
+        {
+            context.Response.StatusCode = StatusCodes.Status500InternalServerError;
+            await context.Response.WriteAsync(exception.ToString(), context.RequestAborted);
         }
 
         await FTask.CompletedTask;
