@@ -10,6 +10,10 @@ using Fantasy.Serialize;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Minimal <see cref="AClientNetwork"/> implementation that lets Fantasy believe it is talking to a
+/// client session while ASP.NET Core captures the serialized reply in-memory.
+/// </summary>
 public sealed class HttpPseudoClientNetwork : AClientNetwork
 {
     private HttpProtoRequestContext? _currentRequestContext;
@@ -48,6 +52,8 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
                 return;
             }
 
+            // If the handler already prepared a packet buffer, reuse it; otherwise serialize the response
+            // exactly the same way the real network pipeline would.
             var packet = memoryStream ?? PackMessage(rpcId, message!, messageType);
             _currentRequestContext.TryWriteResponse(packet);
         }
@@ -86,6 +92,7 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
 
         if (packetBodyCount == 0)
         {
+            // Fantasy encodes an empty body as -1 in the outer packet header.
             packetBodyCount = -1;
         }
 

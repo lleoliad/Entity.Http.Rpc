@@ -2,6 +2,9 @@ using System.Net;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Centralized validation for HTTP RPC configuration so startup fails before the pipeline is built.
+/// </summary>
 public static class HttpRpcOptionsValidator
 {
     public static void ValidateOrThrow(HttpRpcOptions options)

@@ -6,6 +6,9 @@ using Microsoft.AspNetCore.Http;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Handles the raw binary HTTP endpoint by parsing Fantasy outer packets and invoking the scene dispatcher.
+/// </summary>
 public sealed class HttpProtoMessageDispatcher
 {
     private readonly Scene _scene;
@@ -34,6 +37,7 @@ public sealed class HttpProtoMessageDispatcher
         var message = HttpProtoPacketCodec.Deserialize(packet, messageType);
         var isRequest = typeof(IRequest).IsAssignableFrom(messageType);
 
+        // The pseudo network captures anything the Fantasy handler writes back through Session.Send.
         sessionLease.Network.BindRequest(sessionLease.RequestContext);
 
         await HttpProtoSceneDispatcher.RunAsync(_scene, () => DispatchOnSceneAsync(dispatcher, sessionLease.Session, packet.ProtocolCode, packet.RpcId, message));

@@ -4,6 +4,9 @@ using Microsoft.Extensions.Logging;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Marshals work from ASP.NET Core request threads back onto the owning Fantasy scene thread.
+/// </summary>
 internal static class HttpProtoSceneDispatcher
 {
     public static Task RunAsync(Scene scene, Func<FTask> action)

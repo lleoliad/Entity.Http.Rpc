@@ -16,6 +16,9 @@ using Microsoft.IdentityModel.Tokens;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Registers the ASP.NET Core services required to expose Fantasy message handling over HTTP.
+/// </summary>
 public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServices>
 {
     protected override async FTask Handler(OnConfigureHttpServices self)
@@ -69,6 +72,8 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
         {
             problemDetailsOptions.CustomizeProblemDetails = context =>
             {
+                // The trace identifier is generated inside the HTTP pipeline and is used to correlate
+                // exception responses with the request log entry emitted by <see cref="HttpApplicationHandler"/>.
                 context.ProblemDetails.Extensions["traceId"] = context.HttpContext.TraceIdentifier;
 
                 if (httpRpcOptions.ErrorHandling.IncludeExceptionDetails)
@@ -168,6 +173,7 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
 
     private static HttpRpcOptions BindOptions(WebApplicationBuilder builder)
     {
+        // Bind once and validate eagerly so later registrations can safely depend on a fully-formed object.
         var options = new HttpRpcOptions();
         builder.Configuration.GetSection(HttpRpcOptions.SectionName).Bind(options);
         HttpRpcOptionsValidator.ValidateOrThrow(options);

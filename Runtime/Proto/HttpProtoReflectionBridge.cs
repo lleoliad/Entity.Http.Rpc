@@ -7,6 +7,9 @@ using Fantasy.Network.Interface;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Wraps the small amount of reflection needed to bridge HTTP traffic into Fantasy's internal networking API.
+/// </summary>
 public sealed class HttpProtoReflectionBridge
 {
     private static readonly MethodInfo SessionCreateMethod = typeof(Session).GetMethod(
@@ -45,6 +48,8 @@ public sealed class HttpProtoReflectionBridge
 
     public async FTask DispatchAsync(MessageDispatcherComponent dispatcher, Session session, uint protocolCode, uint rpcId, object message)
     {
+        // Fantasy keeps the protocol-code-to-handler map private, so HTTP RPC resolves and invokes the
+        // handler through reflection instead of duplicating framework dispatch logic.
         var messageHandlerDictionary = MessageHandlerDictionaryField.GetValue(dispatcher)
             ?? throw new InvalidOperationException("Fantasy message handler dictionary is not initialized.");
 

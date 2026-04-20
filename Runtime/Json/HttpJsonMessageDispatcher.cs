@@ -8,6 +8,10 @@ using Microsoft.Extensions.Options;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Adapts a JSON envelope into the corresponding Fantasy message invocation and converts request-style
+/// replies back into JSON.
+/// </summary>
 public sealed class HttpJsonMessageDispatcher
 {
     private readonly Scene _scene;
@@ -36,6 +40,8 @@ public sealed class HttpJsonMessageDispatcher
         var message = DeserializeBody(envelope.Body, messageType);
         var isRequest = typeof(IRequest).IsAssignableFrom(messageType);
 
+        // Reuse the proto request context so downstream Fantasy code can keep writing responses through
+        // Session.Send without caring whether the transport was JSON or raw binary.
         sessionLease.Network.BindRequest(sessionLease.RequestContext);
 
         await HttpProtoSceneDispatcher.RunAsync(_scene, () =>
@@ -59,6 +65,8 @@ public sealed class HttpJsonMessageDispatcher
 
         try
         {
+            // The response is first materialized as a Fantasy packet by the pseudo network and then projected
+            // back into JSON here, which guarantees both HTTP formats exercise the same server-side handlers.
             var responseElement = JsonSerializer.SerializeToElement(responseMessage, responseType, _serializerOptions);
             var responseEnvelope = new HttpJsonRpcResponseEnvelope(responsePacket.ProtocolCode, responsePacket.RpcId, responseType.Name, responseElement);
             return new HttpJsonDispatchResult(true, responseEnvelope);
@@ -103,6 +111,12 @@ public readonly record struct HttpJsonDispatchResult(bool HasResponse, HttpJsonR
     public static HttpJsonDispatchResult Empty => new(false, null);
 }
 
+/// <summary>
+/// Wire format accepted by <c>/http/json/rpc</c>.
+/// </summary>
 internal sealed record HttpJsonRpcRequestEnvelope(uint ProtocolCode, uint RpcId, string? MessageName, JsonElement Body);
 
+/// <summary>
+/// Wire format returned by <c>/http/json/rpc</c> when a Fantasy request message produces a reply.
+/// </summary>
 public sealed record HttpJsonRpcResponseEnvelope(uint ProtocolCode, uint RpcId, string MessageName, JsonElement Body);

@@ -5,6 +5,9 @@ using Microsoft.AspNetCore.Mvc;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Produces a consistent JSON or ProblemDetails payload for unhandled ASP.NET Core exceptions.
+/// </summary>
 public sealed class HttpRpcExceptionHandler : IExceptionHandler
 {
     private readonly IProblemDetailsService? _problemDetailsService;
@@ -25,6 +28,8 @@ public sealed class HttpRpcExceptionHandler : IExceptionHandler
 
         if (!_options.ErrorHandling.UseProblemDetails || _problemDetailsService is null)
         {
+            // Fall back to the same ad-hoc JSON shape used by the RPC endpoints so callers get a stable payload
+            // even when ProblemDetails is disabled or unavailable for the current target framework.
             await httpContext.Response.WriteAsJsonAsync(new
             {
                 title = "An unexpected error occurred.",

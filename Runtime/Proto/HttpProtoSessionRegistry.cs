@@ -8,6 +8,10 @@ using Microsoft.AspNetCore.Http;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Keeps a long-lived pseudo Fantasy session per HTTP session identifier so HTTP callers can participate
+/// in workflows that expect a persistent <see cref="Session"/>.
+/// </summary>
 public sealed class HttpProtoSessionRegistry
 {
     private readonly Scene _scene;
@@ -41,6 +45,8 @@ public sealed class HttpProtoSessionRegistry
         {
             if (!_sessions.TryGetValue(sessionId, out var entry))
             {
+                // Session creation must happen on the scene thread because Fantasy entities and sessions
+                // are not thread-safe to construct from arbitrary ASP.NET worker threads.
                 var createdEntry = await CreateEntryAsync(sessionId, context);
 
                 if (!_sessions.TryAdd(sessionId, createdEntry))
@@ -56,6 +62,8 @@ public sealed class HttpProtoSessionRegistry
 
             try
             {
+                // A session lease serializes concurrent HTTP requests that share the same pseudo-session,
+                // which matches the assumption many Fantasy handlers make about session-affine state.
                 if (entry.IsDisposed)
                 {
                     _sessions.TryRemove(sessionId, out _);
@@ -125,6 +133,7 @@ public sealed class HttpProtoSessionRegistry
 
     internal void Release(HttpProtoSessionEntry entry)
     {
+        // Request-scoped data must be cleared before the session is reused by a later HTTP request.
         entry.Network.ClearRequest();
         entry.RequestContext.Clear();
         entry.LastAccessUtc = DateTime.UtcNow;
@@ -176,6 +185,9 @@ public sealed class HttpProtoSessionRegistry
     }
 }
 
+/// <summary>
+/// Lease object that holds the session gate until the current HTTP request is fully processed.
+/// </summary>
 public sealed class HttpProtoSessionLease : IAsyncDisposable
 {
     private readonly HttpProtoSessionRegistry _registry;
@@ -224,6 +236,9 @@ internal sealed class HttpProtoSessionEntry
     public bool IsDisposed { get; set; }
 }
 
+/// <summary>
+/// Indicates a client-visible session problem, such as an expired or missing HTTP proto session.
+/// </summary>
 public sealed class HttpProtoSessionException : Exception
 {
     public HttpProtoSessionException(string message, int statusCode) : base(message)

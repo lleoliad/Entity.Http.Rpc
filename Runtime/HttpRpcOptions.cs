@@ -2,6 +2,9 @@ using System.ComponentModel.DataAnnotations;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Root options object bound from the <c>Entity:HttpRpc</c> configuration section.
+/// </summary>
 public sealed class HttpRpcOptions
 {
     public const string SectionName = "Entity:HttpRpc";
@@ -18,6 +21,9 @@ public sealed class HttpRpcOptions
     public HttpRpcErrorHandlingOptions ErrorHandling { get; set; } = new();
 }
 
+/// <summary>
+/// Controls JSON payload formatting for HTTP JSON RPC requests and responses.
+/// </summary>
 public sealed class HttpRpcJsonOptions
 {
     public bool UseCamelCase { get; set; } = true;
@@ -26,6 +32,9 @@ public sealed class HttpRpcJsonOptions
     public bool SerializeEnumsAsStrings { get; set; } = true;
 }
 
+/// <summary>
+/// Configures the HTTP endpoint that forwards raw Fantasy outer packets.
+/// </summary>
 public sealed class HttpRpcProtoOptions
 {
     public bool Enabled { get; set; } = true;
@@ -37,6 +46,9 @@ public sealed class HttpRpcProtoOptions
     public int EmptyMessageStatusCode { get; set; } = 204;
 }
 
+/// <summary>
+/// Controls the CORS policy applied to the HTTP RPC endpoints.
+/// </summary>
 public sealed class HttpRpcCorsOptions
 {
     public bool Enabled { get; set; }
@@ -48,6 +60,9 @@ public sealed class HttpRpcCorsOptions
     public string[] AllowedHeaders { get; set; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Configures JWT authentication for all HTTP RPC routes.
+/// </summary>
 public sealed class HttpRpcAuthOptions
 {
     public bool Enabled { get; set; }
@@ -65,6 +80,9 @@ public sealed class HttpRpcAuthOptions
     public string[] DefaultSchemes { get; set; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Controls request logging and trace header behavior.
+/// </summary>
 public sealed class HttpRpcObservabilityOptions
 {
     public bool RequestLoggingEnabled { get; set; } = true;
@@ -73,6 +91,9 @@ public sealed class HttpRpcObservabilityOptions
     public string TraceIdentifierHeaderName { get; set; } = "X-Request-Id";
 }
 
+/// <summary>
+/// Defines which reverse-proxy headers are trusted before ASP.NET Core rewrites request metadata.
+/// </summary>
 public sealed class HttpRpcForwardedHeadersOptions
 {
     public bool Enabled { get; set; }
@@ -83,6 +104,9 @@ public sealed class HttpRpcForwardedHeadersOptions
     public string[] KnownNetworks { get; set; } = Array.Empty<string>();
 }
 
+/// <summary>
+/// Configures the optional ASP.NET Core health-check endpoint.
+/// </summary>
 public sealed class HttpRpcHealthCheckOptions
 {
     public bool Enabled { get; set; } = true;
@@ -90,12 +114,18 @@ public sealed class HttpRpcHealthCheckOptions
     public bool AllowAnonymous { get; set; } = true;
 }
 
+/// <summary>
+/// Adds static response headers to every HTTP RPC response.
+/// </summary>
 public sealed class HttpRpcResponseHeadersOptions
 {
     public bool Enabled { get; set; }
     public Dictionary<string, string> Headers { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
+/// <summary>
+/// Controls how unexpected HTTP pipeline failures are rendered back to clients.
+/// </summary>
 public sealed class HttpRpcErrorHandlingOptions
 {
     public bool IncludeExceptionDetails { get; set; }

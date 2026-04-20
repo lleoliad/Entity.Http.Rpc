@@ -2,6 +2,9 @@ using Microsoft.Extensions.Hosting;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Periodically removes idle pseudo sessions that were created for HTTP proto/json traffic.
+/// </summary>
 public sealed class HttpProtoSessionCleanupService : BackgroundService
 {
     private readonly HttpRpcOptions _options;

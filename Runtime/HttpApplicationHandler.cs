@@ -10,6 +10,9 @@ using Microsoft.Extensions.Primitives;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Builds the ASP.NET Core middleware pipeline and maps the HTTP JSON/Proto RPC endpoints.
+/// </summary>
 public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApplication>
 {
     protected override async FTask Handler(OnConfigureHttpApplication self)
@@ -38,6 +41,7 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
 
             if (options.Observability.IncludeTraceIdentifierResponseHeader)
             {
+                // Echo the trace id so API clients can correlate server-side logs with a specific response.
                 context.Response.Headers[options.Observability.TraceIdentifierHeaderName] = context.TraceIdentifier;
             }
 
@@ -126,6 +130,8 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
 
         try
         {
+            // JSON and Proto requests intentionally share the same session registry so handlers that rely
+            // on the Fantasy Session abstraction behave the same no matter which wire format reached them.
             await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
             var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
 
@@ -204,6 +210,8 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
     private static Task WriteJsonErrorAsync(HttpContext context, int statusCode, string title, string? detail)
     {
         context.Response.StatusCode = statusCode;
+        // Keep JSON error payloads minimal and stable so HTTP clients can consume them without depending
+        // on ASP.NET Core ProblemDetails semantics.
         return context.Response.WriteAsJsonAsync(new
         {
             title,

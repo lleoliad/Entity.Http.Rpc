@@ -7,6 +7,9 @@ using Fantasy.Serialize;
 
 namespace Entities.Http.Rpc;
 
+/// <summary>
+/// Parses and deserializes Fantasy outer packets received through HTTP.
+/// </summary>
 internal static class HttpProtoPacketCodec
 {
     public static HttpProtoPacket Parse(byte[] body)
@@ -28,6 +31,7 @@ internal static class HttpProtoPacketCodec
         var rpcId = BinaryPrimitives.ReadUInt32LittleEndian(span.Slice(Packet.OuterPacketRpcIdLocation, sizeof(uint)));
         var expectedLength = packetBodyLength < 0 ? Packet.OuterPacketHeadLength : Packet.OuterPacketHeadLength + packetBodyLength;
 
+        // Fantasy uses -1 to represent "header only" messages, so HTTP validation mirrors that convention.
         if (body.Length != expectedLength)
         {
             throw new InvalidOperationException($"HTTP proto packet length mismatch. Expected:{expectedLength} Actual:{body.Length}.");
