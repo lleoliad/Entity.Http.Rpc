@@ -4,6 +4,7 @@ using Fantasy.Event;
 using Fantasy.Network.HTTP;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Primitives;
 
@@ -119,9 +120,38 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
 
     private async Task HandleJsonRpcRequestAsync(HttpContext context, string? routeMessageName)
     {
-        Log.Debug("[HTTP] HTTP Json RPC request started");
-        context.Response.StatusCode = StatusCodes.Status200OK;
-        await context.Response.WriteAsync("HTTP Json RPC response");
+        var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
+        var sessionRegistry = context.RequestServices.GetRequiredService<HttpProtoSessionRegistry>();
+        var messageDispatcher = context.RequestServices.GetRequiredService<HttpJsonMessageDispatcher>();
+
+        try
+        {
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
+            {
+                context.Response.StatusCode = options.Proto.EmptyMessageStatusCode;
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            await context.Response.WriteAsJsonAsync(dispatchResult.ResponseEnvelope, context.RequestAborted);
+        }
+        catch (HttpProtoSessionException exception)
+        {
+            await WriteJsonErrorAsync(context, exception.StatusCode, exception.Message, null);
+        }
+        catch (InvalidOperationException exception)
+        {
+            await WriteJsonErrorAsync(context, StatusCodes.Status400BadRequest, exception.Message, null);
+        }
+        catch (Exception exception)
+        {
+            var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
+            await WriteJsonErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+
         await FTask.CompletedTask;
     }
 
@@ -169,5 +199,17 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         }
 
         await FTask.CompletedTask;
+    }
+
+    private static Task WriteJsonErrorAsync(HttpContext context, int statusCode, string title, string? detail)
+    {
+        context.Response.StatusCode = statusCode;
+        return context.Response.WriteAsJsonAsync(new
+        {
+            title,
+            status = statusCode,
+            traceId = context.TraceIdentifier,
+            detail
+        }, context.RequestAborted);
     }
 }
