@@ -3,6 +3,7 @@ using System.Text.Json;
 using Entities.Http.Rpc;
 using Fantasy;
 using Fantasy.PacketParser;
+using MessagePack;
 using Xunit;
 
 namespace Entity.Http.Rpc.Tests;
@@ -10,6 +11,7 @@ namespace Entity.Http.Rpc.Tests;
 public sealed class HttpJsonRpcInfrastructureTests
 {
     private static readonly JsonSerializerOptions WebJsonOptions = new(JsonSerializerDefaults.Web);
+    private static readonly MessagePackSerializerOptions WebMessagePackOptions = HttpServicesHandler.ConfigureMessagePackOptions(new HttpRpcMessagePackOptions());
 
     [Fact]
     public void HttpProtoPacketCodec_Should_Parse_Empty_Message_Header()
@@ -71,6 +73,51 @@ public sealed class HttpJsonRpcInfrastructureTests
         finally
         {
             typedMessage.Dispose();
+        }
+    }
+
+    [Fact]
+    public void HttpMessagePackRpcRequestEnvelope_Should_Deserialize_Body()
+    {
+        var request = new C2G_TestRequest
+        {
+            Tag = "hello",
+            Data = [1, 2]
+        };
+
+        try
+        {
+            var envelopeBytes = MessagePackSerializer.Serialize(new HttpMessagePackRpcRequestEnvelope
+            {
+                ProtocolCode = OuterOpcode.C2G_TestRequest,
+                RpcId = 9u,
+                MessageName = "C2G_TestRequest",
+                Body = MessagePackSerializer.Serialize(typeof(C2G_TestRequest), request, WebMessagePackOptions)
+            }, WebMessagePackOptions);
+
+            var envelope = MessagePackSerializer.Deserialize<HttpMessagePackRpcRequestEnvelope>(envelopeBytes, WebMessagePackOptions);
+
+            Assert.NotNull(envelope);
+            Assert.Equal(OuterOpcode.C2G_TestRequest, envelope.ProtocolCode);
+            Assert.Equal(9u, envelope.RpcId);
+            Assert.Equal("C2G_TestRequest", envelope.MessageName);
+
+            var message = MessagePackSerializer.Deserialize(typeof(C2G_TestRequest), envelope.Body!, WebMessagePackOptions);
+            var typedMessage = Assert.IsType<C2G_TestRequest>(message);
+
+            try
+            {
+                Assert.Equal("hello", typedMessage.Tag);
+                Assert.Equal([1, 2], typedMessage.Data);
+            }
+            finally
+            {
+                typedMessage.Dispose();
+            }
+        }
+        finally
+        {
+            request.Dispose();
         }
     }
 }

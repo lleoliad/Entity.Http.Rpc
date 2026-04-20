@@ -2,6 +2,7 @@ using Fantasy;
 using Fantasy.Async;
 using Fantasy.Event;
 using Fantasy.Network.HTTP;
+using MessagePack;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Json;
@@ -11,7 +12,7 @@ using Microsoft.Extensions.Primitives;
 namespace Entities.Http.Rpc;
 
 /// <summary>
-/// Builds the ASP.NET Core middleware pipeline and maps the HTTP JSON/Proto RPC endpoints.
+/// Builds the ASP.NET Core middleware pipeline and maps the HTTP JSON/MessagePack/Proto RPC endpoints.
 /// </summary>
 public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApplication>
 {
@@ -103,6 +104,13 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             return HandleJsonRpcRequestAsync(context, routeMessageName);
         });
 
+        app.MapPost("/http/messagepack/rpc", context => HandleMessagePackRpcRequestAsync(context, null));
+        app.MapPost("/http/messagepack/rpc/{messageName}", context =>
+        {
+            var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
+            return HandleMessagePackRpcRequestAsync(context, routeMessageName);
+        });
+
         app.MapPost("/http/proto/rpc", context => HandleProtoRpcRequestAsync(context, null));
         app.MapPost("/http/proto/rpc/{messageName}", context =>
         {
@@ -156,6 +164,50 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         {
             var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
             await WriteJsonErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+
+        await FTask.CompletedTask;
+    }
+
+    private async Task HandleMessagePackRpcRequestAsync(HttpContext context, string? routeMessageName)
+    {
+        var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
+        var sessionRegistry = context.RequestServices.GetRequiredService<HttpProtoSessionRegistry>();
+        var messageDispatcher = context.RequestServices.GetRequiredService<HttpMessagePackMessageDispatcher>();
+
+        if (!options.MessagePack.Enabled)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        try
+        {
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
+            {
+                context.Response.StatusCode = options.Proto.EmptyMessageStatusCode;
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = options.MessagePack.ContentType;
+            await MessagePackSerializer.SerializeAsync(context.Response.Body, dispatchResult.ResponseEnvelope, HttpServicesHandler.ConfigureMessagePackOptions(options.MessagePack), context.RequestAborted);
+        }
+        catch (HttpProtoSessionException exception)
+        {
+            await WriteMessagePackErrorAsync(context, options, exception.StatusCode, exception.Message, null);
+        }
+        catch (InvalidOperationException exception)
+        {
+            await WriteMessagePackErrorAsync(context, options, StatusCodes.Status400BadRequest, exception.Message, null);
+        }
+        catch (Exception exception)
+        {
+            var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
+            await WriteMessagePackErrorAsync(context, options, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
         }
 
         await FTask.CompletedTask;
@@ -219,5 +271,19 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             traceId = context.TraceIdentifier,
             detail
         }, context.RequestAborted);
+    }
+
+    private static Task WriteMessagePackErrorAsync(HttpContext context, HttpRpcOptions options, int statusCode, string title, string? detail)
+    {
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = options.MessagePack.ContentType;
+
+        return MessagePackSerializer.SerializeAsync(context.Response.Body, new HttpMessagePackErrorEnvelope
+        {
+            Title = title,
+            Status = statusCode,
+            TraceId = context.TraceIdentifier,
+            Detail = detail
+        }, HttpServicesHandler.ConfigureMessagePackOptions(options.MessagePack), context.RequestAborted);
     }
 }

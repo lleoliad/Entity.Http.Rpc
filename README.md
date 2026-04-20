@@ -2,18 +2,20 @@
 
 ![.NET](https://img.shields.io/badge/.NET-8%2F9%2F10-512BD4)
 ![Entity](https://img.shields.io/badge/Entity-Fantasy%20RPC-0A7E8C)
-![Transport](https://img.shields.io/badge/Transport-HTTP%20JSON%20%2B%20Proto-1F6FEB)
+![Transport](https://img.shields.io/badge/Transport-HTTP%20JSON%20%2B%20MessagePack%20%2B%20Proto-1F6FEB)
 ![Auth](https://img.shields.io/badge/Auth-JWT%20Bearer-8B5CF6)
 ![License](https://img.shields.io/badge/License-MIT-green)
 
-`Entity.Http.Rpc` adds HTTP-based RPC endpoints to the `Entity`/`Fantasy` server stack. In addition to the usual ASP.NET Core baseline features such as JSON options, JWT authentication, CORS, forwarded headers, exception handling, and health checks, the package now exposes both JSON and Proto RPC endpoints that dispatch directly into Fantasy message handlers.
+`Entity.Http.Rpc` adds HTTP-based RPC endpoints to the `Entity`/`Fantasy` server stack. In addition to the usual ASP.NET Core baseline features such as JSON options, JWT authentication, CORS, forwarded headers, exception handling, and health checks, the package now exposes JSON, MessagePack, and Proto RPC endpoints that dispatch directly into Fantasy message handlers.
 
 ## Features
 
 - HTTP JSON RPC endpoint backed by Fantasy protocol codes and message dispatch
+- HTTP MessagePack RPC endpoint backed by Fantasy protocol codes and message dispatch
 - HTTP Proto RPC endpoint for binary Fantasy packets
-- Shared HTTP session bridge for JSON and Proto requests
+- Shared HTTP session bridge for JSON, MessagePack, and Proto requests
 - Configuration-driven JSON serialization behavior
+- Configuration-driven MessagePack serialization behavior
 - Optional JWT Bearer authentication and authorization
 - Unified exception handling and trace-aware error payloads
 - Request tracing, response trace headers, and request logging
@@ -33,6 +35,8 @@ The middleware registers these POST endpoints:
 
 - `/http/json/rpc`
 - `/http/json/rpc/{messageName}`
+- `/http/messagepack/rpc`
+- `/http/messagepack/rpc/{messageName}`
 - `/http/proto/rpc`
 - `/http/proto/rpc/{messageName}`
 
@@ -79,6 +83,24 @@ Behavior notes:
 - If the route `messageName` or body `messageName` does not match the resolved message type, the endpoint returns `400`.
 - JSON RPC always reuses the Proto session bridge and response packet pipeline internally.
 
+## MessagePack RPC Contract
+
+MessagePack RPC uses the same envelope semantics as JSON RPC, but the request and response are MessagePack-encoded. The envelope shape is:
+
+- `protocolCode`: `uint`
+- `rpcId`: `uint`
+- `messageName`: `string?`
+- `body`: `bin`
+
+Behavior notes:
+
+- `MessagePack.Enabled = false` disables the MessagePack endpoint and returns `404` for MessagePack requests.
+- `body` contains the MessagePack-encoded Fantasy message payload.
+- `body` is deserialized using the configured MessagePack resolver and compression settings.
+- If the resolved Fantasy message type does not implement `IRequest`, the endpoint returns `Proto.EmptyMessageStatusCode` and no MessagePack body.
+- If the route `messageName` or body `messageName` does not match the resolved message type, the endpoint returns `400`.
+- MessagePack RPC always reuses the Proto session bridge and response packet pipeline internally.
+
 ## Proto RPC Contract
 
 Proto RPC accepts the binary Fantasy outer packet format on `/http/proto/rpc` and `/http/proto/rpc/{messageName}`.
@@ -91,7 +113,7 @@ Behavior notes:
 
 ## Session Behavior
 
-JSON and Proto RPC share the same HTTP session registry.
+JSON, MessagePack, and Proto RPC share the same HTTP session registry.
 
 - Session IDs are carried in `Proto.SessionHeaderName`, which defaults to `X-Session-Id`.
 - If the request does not provide the header and `Proto.RequireExistingSession = false`, the server creates a new session ID and writes it back to the response header.
@@ -106,6 +128,7 @@ Unhandled middleware-level exceptions are processed by `HttpRpcExceptionHandler`
 - If `ErrorHandling.UseProblemDetails = true`, non-RPC exceptions are written through ASP.NET Core `ProblemDetails`.
 - If `ErrorHandling.UseProblemDetails = false`, errors are returned as JSON with `title`, `status`, `traceId`, and optional `detail`.
 - JSON RPC validation and session errors are returned as JSON payloads.
+- MessagePack RPC validation and session errors are returned as MessagePack payloads.
 - Proto RPC validation and session errors are returned as plain text.
 - `ErrorHandling.IncludeExceptionDetails` controls whether exception details are included in error responses.
 
@@ -122,6 +145,12 @@ Add the `Entity:HttpRpc` section to the host application configuration:
         "WriteIndented": false,
         "IgnoreNullValues": true,
         "SerializeEnumsAsStrings": true
+      },
+      "MessagePack": {
+        "Enabled": true,
+        "ContentType": "application/x-msgpack",
+        "UseContractlessResolver": true,
+        "UseLz4BlockArrayCompression": false
       },
       "Proto": {
         "Enabled": true,
@@ -192,6 +221,7 @@ Add the `Entity:HttpRpc` section to the host application configuration:
 
 Startup validation fails when configuration is inconsistent. Important rules:
 
+- `MessagePack.ContentType` is required when `MessagePack.Enabled = true`.
 - `Proto.SessionHeaderName` is required when `Proto.Enabled = true`.
 - `Proto.SessionIdleTimeoutSeconds` and `Proto.SessionCleanupIntervalSeconds` must be greater than zero.
 - `Proto.InvalidSessionStatusCode` and `Proto.EmptyMessageStatusCode` must be valid HTTP status codes.
@@ -209,6 +239,7 @@ Startup validation fails when configuration is inconsistent. Important rules:
 ## Default Behavior
 
 - JSON RPC endpoints are always mapped.
+- MessagePack RPC endpoints are mapped, but return `404` when `MessagePack.Enabled = false`.
 - Proto RPC endpoints are mapped, but return `404` when `Proto.Enabled = false`.
 - A request trace ID is always ensured and can be echoed in the configured response header.
 - Request logging is enabled by default.
@@ -235,7 +266,7 @@ dotnet pack Entity.Http.Rpc.csproj -c Release
 - Enable `ForwardedHeaders` and restrict `KnownProxies` or `KnownNetworks` when running behind a reverse proxy.
 - Keep `ErrorHandling.IncludeExceptionDetails = false` in production.
 - Use explicit CORS origins instead of permissive settings.
-- Treat `X-Session-Id` as an application session handle and pass it consistently for stateful JSON or Proto RPC clients.
+- Treat `X-Session-Id` as an application session handle and pass it consistently for stateful JSON, MessagePack, or Proto RPC clients.
 
 ## Links
 

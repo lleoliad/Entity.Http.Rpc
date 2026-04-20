@@ -29,6 +29,7 @@ public static class HttpRpcOptionsValidator
             return errors;
         }
 
+        ValidateMessagePack(options.MessagePack, errors);
         ValidateProto(options.Proto, errors);
         ValidateCors(options.Cors, errors);
         ValidateAuth(options.Auth, errors);
@@ -64,6 +65,19 @@ public static class HttpRpcOptionsValidator
         if (options.AllowCredentials && options.AllowedOrigins.Any(origin => origin == "*" || string.Equals(origin, "all", StringComparison.OrdinalIgnoreCase)))
         {
             errors.Add("Cors.AllowCredentials cannot be enabled when Cors.AllowedOrigins contains a wildcard.");
+        }
+    }
+
+    private static void ValidateMessagePack(HttpRpcMessagePackOptions options, ICollection<string> errors)
+    {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ContentType))
+        {
+            errors.Add("MessagePack.ContentType is required when MessagePack.Enabled is enabled.");
         }
     }
 

@@ -12,6 +12,8 @@ using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using MessagePack;
+using MessagePack.Resolvers;
 using Microsoft.IdentityModel.Tokens;
 
 namespace Entities.Http.Rpc;
@@ -29,6 +31,7 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
         self.Builder.Services.AddSingleton<HttpProtoSessionRegistry>();
         self.Builder.Services.AddSingleton<HttpProtoMessageDispatcher>();
         self.Builder.Services.AddSingleton<HttpJsonMessageDispatcher>();
+        self.Builder.Services.AddSingleton<HttpMessagePackMessageDispatcher>();
         self.Builder.Services.AddHostedService<HttpProtoSessionCleanupService>();
         self.Builder.Services.AddOptions<HttpRpcOptions>()
             .Bind(self.Builder.Configuration.GetSection(HttpRpcOptions.SectionName))
@@ -183,6 +186,20 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
     private static JsonNamingPolicy? ConfigureNamingPolicy(HttpRpcJsonOptions options)
     {
         return options.UseCamelCase ? JsonNamingPolicy.CamelCase : null;
+    }
+
+    internal static MessagePackSerializerOptions ConfigureMessagePackOptions(HttpRpcMessagePackOptions options)
+    {
+        var serializerOptions = options.UseContractlessResolver
+            ? ContractlessStandardResolver.Options
+            : StandardResolver.Options;
+
+        if (options.UseLz4BlockArrayCompression)
+        {
+            serializerOptions = serializerOptions.WithCompression(MessagePackCompression.Lz4BlockArray);
+        }
+
+        return serializerOptions;
     }
 
     private static ForwardedHeaders ResolveForwardedHeaders(HttpRpcForwardedHeadersOptions options)
