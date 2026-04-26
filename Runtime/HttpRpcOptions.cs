@@ -12,6 +12,7 @@ public sealed class HttpRpcOptions
 
     public HttpRpcJsonOptions Json { get; set; } = new();
     public HttpRpcMessagePackOptions MessagePack { get; set; } = new();
+    public HttpRpcMemoryPackOptions MemoryPack { get; set; } = new();
     public HttpRpcProtoOptions Proto { get; set; } = new();
     public HttpRpcCorsOptions Cors { get; set; } = new();
     public HttpRpcAuthOptions Auth { get; set; } = new();
@@ -42,6 +43,15 @@ public sealed class HttpRpcMessagePackOptions
     public string ContentType { get; set; } = "application/x-msgpack";
     public bool UseContractlessResolver { get; set; } = true;
     public bool UseLz4BlockArrayCompression { get; set; }
+}
+
+/// <summary>
+/// Controls MemoryPack payload formatting for HTTP MemoryPack RPC requests and responses.
+/// </summary>
+public sealed class HttpRpcMemoryPackOptions
+{
+    public bool Enabled { get; set; } = true;
+    public string ContentType { get; set; } = "application/x-memorypack";
 }
 
 /// <summary>

@@ -72,6 +72,23 @@ public sealed class HttpRpcOptionsValidatorTests
     }
 
     [Fact]
+    public void Validate_Should_Fail_When_MemoryPack_Enabled_Without_ContentType()
+    {
+        var options = new HttpRpcOptions
+        {
+            MemoryPack =
+            {
+                Enabled = true,
+                ContentType = ""
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("MemoryPack.ContentType"));
+    }
+
+    [Fact]
     public void Validate_Should_Fail_When_Proto_Enabled_Without_Header_Name()
     {
         var options = new HttpRpcOptions

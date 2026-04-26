@@ -111,6 +111,13 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             return HandleMessagePackRpcRequestAsync(context, routeMessageName);
         });
 
+        app.MapPost("/http/memorypack/rpc", context => HandleMemoryPackRpcRequestAsync(context, null));
+        app.MapPost("/http/memorypack/rpc/{messageName}", context =>
+        {
+            var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
+            return HandleMemoryPackRpcRequestAsync(context, routeMessageName);
+        });
+
         app.MapPost("/http/proto/rpc", context => HandleProtoRpcRequestAsync(context, null));
         app.MapPost("/http/proto/rpc/{messageName}", context =>
         {
@@ -213,6 +220,51 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         await FTask.CompletedTask;
     }
 
+    private async Task HandleMemoryPackRpcRequestAsync(HttpContext context, string? routeMessageName)
+    {
+        var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
+        var sessionRegistry = context.RequestServices.GetRequiredService<HttpProtoSessionRegistry>();
+        var messageDispatcher = context.RequestServices.GetRequiredService<HttpMemoryPackMessageDispatcher>();
+
+        if (!options.MemoryPack.Enabled)
+        {
+            context.Response.StatusCode = StatusCodes.Status404NotFound;
+            return;
+        }
+
+        try
+        {
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
+            {
+                context.Response.StatusCode = options.Proto.EmptyMessageStatusCode;
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status200OK;
+            context.Response.ContentType = options.MemoryPack.ContentType;
+            var responseBody = HttpMemoryPackMessageCodec.SerializeResponseEnvelope(dispatchResult.ResponseEnvelope);
+            await context.Response.BodyWriter.WriteAsync(responseBody, context.RequestAborted);
+        }
+        catch (HttpProtoSessionException exception)
+        {
+            await WriteMemoryPackErrorAsync(context, options, exception.StatusCode, exception.Message, null);
+        }
+        catch (InvalidOperationException exception)
+        {
+            await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status400BadRequest, exception.Message, null);
+        }
+        catch (Exception exception)
+        {
+            var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
+            await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+
+        await FTask.CompletedTask;
+    }
+
     private async Task HandleProtoRpcRequestAsync(HttpContext context, string? routeMessageName)
     {
         var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
@@ -271,6 +323,14 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             traceId = context.TraceIdentifier,
             detail
         }, context.RequestAborted);
+    }
+
+    private static Task WriteMemoryPackErrorAsync(HttpContext context, HttpRpcOptions options, int statusCode, string title, string? detail)
+    {
+        context.Response.StatusCode = statusCode;
+        context.Response.ContentType = options.MemoryPack.ContentType;
+        var body = HttpMemoryPackMessageCodec.SerializeErrorEnvelope(new HttpMemoryPackErrorEnvelope(title, statusCode, context.TraceIdentifier, detail));
+        return context.Response.BodyWriter.WriteAsync(body, context.RequestAborted).AsTask();
     }
 
     private static Task WriteMessagePackErrorAsync(HttpContext context, HttpRpcOptions options, int statusCode, string title, string? detail)

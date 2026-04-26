@@ -32,6 +32,7 @@ public sealed class HttpServicesHandler : AsyncEventSystem<OnConfigureHttpServic
         self.Builder.Services.AddSingleton<HttpProtoMessageDispatcher>();
         self.Builder.Services.AddSingleton<HttpJsonMessageDispatcher>();
         self.Builder.Services.AddSingleton<HttpMessagePackMessageDispatcher>();
+        self.Builder.Services.AddSingleton<HttpMemoryPackMessageDispatcher>();
         self.Builder.Services.AddHostedService<HttpProtoSessionCleanupService>();
         self.Builder.Services.AddOptions<HttpRpcOptions>()
             .Bind(self.Builder.Configuration.GetSection(HttpRpcOptions.SectionName))

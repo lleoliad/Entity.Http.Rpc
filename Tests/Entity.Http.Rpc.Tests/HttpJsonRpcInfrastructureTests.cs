@@ -120,4 +120,51 @@ public sealed class HttpJsonRpcInfrastructureTests
             request.Dispose();
         }
     }
+
+    [Fact]
+    public void HttpMemoryPackRpcRequestEnvelope_Should_Deserialize_Body()
+    {
+        var response = new G2C_TestMemoryPackResponse
+        {
+            ErrorCode = 7,
+            Info = new TestMemoryPackInfo
+            {
+                A = "memorypack"
+            }
+        };
+
+        try
+        {
+            var envelopeBytes = HttpMemoryPackMessageCodec.SerializeRequestEnvelope(new HttpMemoryPackRpcRequestEnvelope(
+                OuterOpcode.G2C_TestMemoryPackResponse,
+                11u,
+                "G2C_TestMemoryPackResponse",
+                MemoryPack.MemoryPackSerializer.Serialize(typeof(G2C_TestMemoryPackResponse), response)));
+
+            var envelope = HttpMemoryPackMessageCodec.DeserializeRequestEnvelope(envelopeBytes);
+
+            Assert.NotNull(envelope);
+            Assert.Equal(OuterOpcode.G2C_TestMemoryPackResponse, envelope.ProtocolCode);
+            Assert.Equal(11u, envelope.RpcId);
+            Assert.Equal("G2C_TestMemoryPackResponse", envelope.MessageName);
+
+            var message = HttpMemoryPackMessageCodec.DeserializeBody(envelope.Body, typeof(G2C_TestMemoryPackResponse), envelope.ProtocolCode);
+            var typedMessage = Assert.IsType<G2C_TestMemoryPackResponse>(message);
+
+            try
+            {
+                Assert.Equal(7u, typedMessage.ErrorCode);
+                Assert.NotNull(typedMessage.Info);
+                Assert.Equal("memorypack", typedMessage.Info.A);
+            }
+            finally
+            {
+                typedMessage.Dispose();
+            }
+        }
+        finally
+        {
+            response.Dispose();
+        }
+    }
 }

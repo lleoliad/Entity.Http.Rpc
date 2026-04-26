@@ -7,6 +7,7 @@ using Fantasy.Network;
 using Fantasy.Network.Interface;
 using Fantasy.PacketParser;
 using Fantasy.Serialize;
+using MemoryPack;
 
 namespace Entities.Http.Rpc;
 
@@ -78,7 +79,13 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
         OpCodeIdStruct opCodeIdStruct = opCode;
         var memoryStreamLength = 0;
 
-        if (SerializerManager.TrySerialize(opCodeIdStruct.OpCodeProtocolType, messageType, message, memoryStream, out var error))
+        if (opCodeIdStruct.OpCodeProtocolType == OpCodeProtocolType.MemoryPack)
+        {
+            var body = MemoryPackSerializer.Serialize(messageType, message);
+            memoryStream.Write(body, 0, body.Length);
+            memoryStreamLength = (int)memoryStream.Position;
+        }
+        else if (SerializerManager.TrySerialize(opCodeIdStruct.OpCodeProtocolType, messageType, message, memoryStream, out var error))
         {
             memoryStreamLength = (int)memoryStream.Position;
         }

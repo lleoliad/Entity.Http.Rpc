@@ -37,6 +37,7 @@
     
     <ItemGroup>
         <FrameworkReference Include="Microsoft.AspNetCore.App" />
+        <PackageReference Include="MemoryPack.Core" Version="1.21.4" />
         <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.26" />
         <PackageReference Include="MessagePack" Version="2.5.192" />
         <PackageReference Include="Microsoft.IdentityModel.Tokens" Version="8.17.0" />
@@ -57,6 +58,7 @@
 
     <ItemGroup>
       <Folder Include="Runtime\Json\" />
+      <Folder Include="Runtime\MemoryPack\" />
       <Folder Include="Runtime\MessagePack\" />
       <Folder Include="Runtime\Proto\" />
     </ItemGroup>

@@ -30,6 +30,7 @@ public static class HttpRpcOptionsValidator
         }
 
         ValidateMessagePack(options.MessagePack, errors);
+        ValidateMemoryPack(options.MemoryPack, errors);
         ValidateProto(options.Proto, errors);
         ValidateCors(options.Cors, errors);
         ValidateAuth(options.Auth, errors);
@@ -78,6 +79,19 @@ public static class HttpRpcOptionsValidator
         if (string.IsNullOrWhiteSpace(options.ContentType))
         {
             errors.Add("MessagePack.ContentType is required when MessagePack.Enabled is enabled.");
+        }
+    }
+
+    private static void ValidateMemoryPack(HttpRpcMemoryPackOptions options, ICollection<string> errors)
+    {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(options.ContentType))
+        {
+            errors.Add("MemoryPack.ContentType is required when MemoryPack.Enabled is enabled.");
         }
     }
 
