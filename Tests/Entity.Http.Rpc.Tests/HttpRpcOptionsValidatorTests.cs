@@ -123,4 +123,73 @@ public sealed class HttpRpcOptionsValidatorTests
         Assert.Contains(errors, message => message.Contains("Proto.SessionIdleTimeoutSeconds"));
         Assert.Contains(errors, message => message.Contains("Proto.SessionCleanupIntervalSeconds"));
     }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Encryption_Enabled_Without_Key()
+    {
+        var options = new HttpRpcOptions
+        {
+            Encryption =
+            {
+                Enabled = true
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Encryption.KeyBase64"));
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Encryption_Key_Is_Not_Thirty_Two_Bytes()
+    {
+        var options = new HttpRpcOptions
+        {
+            Encryption =
+            {
+                Enabled = true,
+                KeyBase64 = Convert.ToBase64String(new byte[16])
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Encryption.KeyBase64"));
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Encryption_Algorithm_Is_Unsupported()
+    {
+        var options = new HttpRpcOptions
+        {
+            Encryption =
+            {
+                Enabled = true,
+                Algorithm = "AesCbc",
+                KeyBase64 = Convert.ToBase64String(new byte[32])
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Encryption.Algorithm"));
+    }
+
+    [Fact]
+    public void Validate_Should_Fail_When_Encryption_Status_Code_Is_Invalid()
+    {
+        var options = new HttpRpcOptions
+        {
+            Encryption =
+            {
+                Enabled = true,
+                KeyBase64 = Convert.ToBase64String(new byte[32]),
+                DecryptionFailureStatusCode = 42
+            }
+        };
+
+        var errors = HttpRpcOptionsValidator.Validate(options);
+
+        Assert.Contains(errors, message => message.Contains("Encryption.DecryptionFailureStatusCode"));
+    }
 }

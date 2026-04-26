@@ -15,6 +15,7 @@
 - HTTP MemoryPack RPC endpoint backed by Fantasy protocol codes and message dispatch
 - HTTP Proto RPC endpoint for binary Fantasy packets
 - Shared HTTP session bridge for JSON, MessagePack, MemoryPack, and Proto requests
+- Optional AES-GCM body encryption for all HTTP RPC transports
 - Configuration-driven JSON serialization behavior
 - Configuration-driven MessagePack serialization behavior
 - Configuration-driven MemoryPack serialization behavior
@@ -146,6 +147,8 @@ JSON, MessagePack, MemoryPack, and Proto RPC share the same HTTP session registr
 
 Unhandled middleware-level exceptions are processed by `HttpRpcExceptionHandler`.
 
+- If `Encryption.Enabled = true`, RPC response bodies are encrypted after format-specific error payloads are written.
+- If request body decryption fails, the endpoint returns `Encryption.DecryptionFailureStatusCode` with a minimal plain-text error.
 - If `ErrorHandling.UseProblemDetails = true`, non-RPC exceptions are written through ASP.NET Core `ProblemDetails`.
 - If `ErrorHandling.UseProblemDetails = false`, errors are returned as JSON with `title`, `status`, `traceId`, and optional `detail`.
 - JSON RPC validation and session errors are returned as JSON payloads.
@@ -234,6 +237,13 @@ Add the `Entity:HttpRpc` section to the host application configuration:
           "X-Service-Name": "entity-http-rpc"
         }
       },
+      "Encryption": {
+        "Enabled": false,
+        "Algorithm": "AesGcm",
+        "KeyBase64": "replace-with-base64-encoded-32-byte-key",
+        "EncryptedContentType": "application/octet-stream",
+        "DecryptionFailureStatusCode": 400
+      },
       "ErrorHandling": {
         "UseProblemDetails": true,
         "IncludeExceptionDetails": false
@@ -262,6 +272,10 @@ Startup validation fails when configuration is inconsistent. Important rules:
 - `Observability.TraceIdentifierHeaderName` is required when trace response headers are enabled.
 - `HealthChecks.Path` must start with `/`.
 - `ForwardedHeaders.KnownProxies` and `ForwardedHeaders.KnownNetworks` must contain valid IP/CIDR values.
+- `Encryption.KeyBase64` is required when encryption is enabled and must decode to exactly 32 bytes.
+- `Encryption.Algorithm` must be `AesGcm` when encryption is enabled.
+- `Encryption.EncryptedContentType` is required when encryption is enabled.
+- `Encryption.DecryptionFailureStatusCode` must be a valid HTTP status code.
 
 ## Default Behavior
 
@@ -273,6 +287,19 @@ Startup validation fails when configuration is inconsistent. Important rules:
 - Request logging is enabled by default.
 - Health checks are enabled by default at `/health`.
 - The JSON serializer defaults to camelCase, ignores nulls, and serializes enums as strings.
+- RPC body encryption is disabled by default.
+
+## RPC Body Encryption
+
+When `Encryption.Enabled = true`, all `/http/*/rpc` request bodies must be AES-GCM encrypted and every non-empty RPC response body is AES-GCM encrypted. This is a transport wrapper around the complete HTTP body, so the JSON, MessagePack, MemoryPack, and Proto contracts do not change after decryption.
+
+The encrypted wire format is:
+
+```text
+version(1 byte = 1) + nonce(12 bytes) + tag(16 bytes) + ciphertext
+```
+
+The configured `Encryption.KeyBase64` value must be the same Base64-encoded 32-byte key on the server and Unity client. Generate a production key with a secure random source and store it outside the repository.
 
 ## Runtime Integration
 
@@ -291,6 +318,7 @@ dotnet pack Entity.Http.Rpc.csproj -c Release
 ## Production Recommendations
 
 - Store JWT signing keys in a secure configuration source rather than in the repository.
+- Store RPC encryption keys in a secure configuration source and rotate them through deployment configuration.
 - Enable `ForwardedHeaders` and restrict `KnownProxies` or `KnownNetworks` when running behind a reverse proxy.
 - Keep `ErrorHandling.IncludeExceptionDetails = false` in production.
 - Use explicit CORS origins instead of permissive settings.

@@ -97,32 +97,32 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             }
         }
 
-        app.MapPost("/http/json/rpc", context => HandleJsonRpcRequestAsync(context, null));
+        app.MapPost("/http/json/rpc", context => HandleEncryptedRpcRequestAsync(context, () => HandleJsonRpcRequestAsync(context, null)));
         app.MapPost("/http/json/rpc/{messageName}", context =>
         {
             var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
-            return HandleJsonRpcRequestAsync(context, routeMessageName);
+            return HandleEncryptedRpcRequestAsync(context, () => HandleJsonRpcRequestAsync(context, routeMessageName));
         });
 
-        app.MapPost("/http/messagepack/rpc", context => HandleMessagePackRpcRequestAsync(context, null));
+        app.MapPost("/http/messagepack/rpc", context => HandleEncryptedRpcRequestAsync(context, () => HandleMessagePackRpcRequestAsync(context, null)));
         app.MapPost("/http/messagepack/rpc/{messageName}", context =>
         {
             var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
-            return HandleMessagePackRpcRequestAsync(context, routeMessageName);
+            return HandleEncryptedRpcRequestAsync(context, () => HandleMessagePackRpcRequestAsync(context, routeMessageName));
         });
 
-        app.MapPost("/http/memorypack/rpc", context => HandleMemoryPackRpcRequestAsync(context, null));
+        app.MapPost("/http/memorypack/rpc", context => HandleEncryptedRpcRequestAsync(context, () => HandleMemoryPackRpcRequestAsync(context, null)));
         app.MapPost("/http/memorypack/rpc/{messageName}", context =>
         {
             var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
-            return HandleMemoryPackRpcRequestAsync(context, routeMessageName);
+            return HandleEncryptedRpcRequestAsync(context, () => HandleMemoryPackRpcRequestAsync(context, routeMessageName));
         });
 
-        app.MapPost("/http/proto/rpc", context => HandleProtoRpcRequestAsync(context, null));
+        app.MapPost("/http/proto/rpc", context => HandleEncryptedRpcRequestAsync(context, () => HandleProtoRpcRequestAsync(context, null)));
         app.MapPost("/http/proto/rpc/{messageName}", context =>
         {
             var routeMessageName = context.Request.RouteValues.TryGetValue("messageName", out var value) ? value?.ToString() : null;
-            return HandleProtoRpcRequestAsync(context, routeMessageName);
+            return HandleEncryptedRpcRequestAsync(context, () => HandleProtoRpcRequestAsync(context, routeMessageName));
         });
 
         Log.Info($"[HTTP] HTTP RPC pipeline configured: Scene {self.Scene.SceneConfigId}, AuthEnabled={options.Auth.Enabled}, HealthChecksEnabled={options.HealthChecks.Enabled}");
@@ -135,6 +135,58 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         var duration = (DateTime.UtcNow - start).TotalMilliseconds;
         var ip = options.Observability.IncludeClientIp ? context.Connection.RemoteIpAddress?.ToString() : "hidden";
         Log.Info($"[HTTP-{traceId}] {context.Request.Method} {context.Request.Path} responded {context.Response.StatusCode} in {duration:F2}ms from {ip}");
+    }
+
+    private static async Task HandleEncryptedRpcRequestAsync(HttpContext context, Func<Task> next)
+    {
+        var options = context.RequestServices.GetRequiredService<HttpRpcOptions>();
+        var payloadProtector = context.RequestServices.GetRequiredService<HttpRpcPayloadProtector>();
+
+        if (!payloadProtector.Enabled)
+        {
+            await next.Invoke();
+            return;
+        }
+
+        var originalRequestBody = context.Request.Body;
+        var originalResponseBody = context.Response.Body;
+
+        try
+        {
+            using var encryptedRequest = new MemoryStream();
+            await context.Request.Body.CopyToAsync(encryptedRequest, context.RequestAborted);
+
+            if (!payloadProtector.TryUnprotect(encryptedRequest.ToArray(), out var requestBody))
+            {
+                context.Response.StatusCode = options.Encryption.DecryptionFailureStatusCode;
+                await context.Response.WriteAsync("Encrypted HTTP RPC request body is invalid.", context.RequestAborted);
+                return;
+            }
+
+            await using var decryptedRequest = new MemoryStream(requestBody, writable: false);
+            await using var responseBuffer = new MemoryStream();
+            context.Request.Body = decryptedRequest;
+            context.Response.Body = responseBuffer;
+
+            await next.Invoke();
+
+            context.Response.Body = originalResponseBody;
+
+            if (responseBuffer.Length == 0)
+            {
+                return;
+            }
+
+            var encryptedResponse = payloadProtector.Protect(responseBuffer.ToArray());
+            context.Response.ContentType = options.Encryption.EncryptedContentType;
+            context.Response.ContentLength = encryptedResponse.Length;
+            await context.Response.Body.WriteAsync(encryptedResponse, context.RequestAborted);
+        }
+        finally
+        {
+            context.Request.Body = originalRequestBody;
+            context.Response.Body = originalResponseBody;
+        }
     }
 
     private async Task HandleJsonRpcRequestAsync(HttpContext context, string? routeMessageName)

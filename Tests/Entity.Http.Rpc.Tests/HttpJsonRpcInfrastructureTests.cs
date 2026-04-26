@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using System.Text;
 using System.Text.Json;
 using Entities.Http.Rpc;
 using Fantasy;
@@ -166,5 +167,79 @@ public sealed class HttpJsonRpcInfrastructureTests
         {
             response.Dispose();
         }
+    }
+
+    [Fact]
+    public void HttpRpcPayloadProtector_Should_RoundTrip_Body()
+    {
+        var protector = CreateEnabledPayloadProtector();
+        var plaintext = Encoding.UTF8.GetBytes("{\"protocolCode\":1}");
+
+        var encrypted = protector.Protect(plaintext);
+        var success = protector.TryUnprotect(encrypted, out var decrypted);
+
+        Assert.True(success);
+        Assert.Equal(plaintext, decrypted);
+    }
+
+    [Fact]
+    public void HttpRpcPayloadProtector_Should_Use_Random_Nonce()
+    {
+        var protector = CreateEnabledPayloadProtector();
+        var plaintext = Encoding.UTF8.GetBytes("same-body");
+
+        var first = protector.Protect(plaintext);
+        var second = protector.Protect(plaintext);
+
+        Assert.NotEqual(first, second);
+    }
+
+    [Fact]
+    public void HttpRpcPayloadProtector_Should_Reject_Tampered_Body()
+    {
+        var protector = CreateEnabledPayloadProtector();
+        var encrypted = protector.Protect(Encoding.UTF8.GetBytes("body"));
+        encrypted[^1] ^= 0x01;
+
+        var success = protector.TryUnprotect(encrypted, out var decrypted);
+
+        Assert.False(success);
+        Assert.Empty(decrypted);
+    }
+
+    [Fact]
+    public void HttpRpcPayloadProtector_Should_Reject_Invalid_Version()
+    {
+        var protector = CreateEnabledPayloadProtector();
+        var encrypted = protector.Protect(Encoding.UTF8.GetBytes("body"));
+        encrypted[0] = 2;
+
+        var success = protector.TryUnprotect(encrypted, out var decrypted);
+
+        Assert.False(success);
+        Assert.Empty(decrypted);
+    }
+
+    [Fact]
+    public void HttpRpcPayloadProtector_Should_Reject_Short_Body()
+    {
+        var protector = CreateEnabledPayloadProtector();
+
+        var success = protector.TryUnprotect([1, 2, 3], out var decrypted);
+
+        Assert.False(success);
+        Assert.Empty(decrypted);
+    }
+
+    private static HttpRpcPayloadProtector CreateEnabledPayloadProtector()
+    {
+        return new HttpRpcPayloadProtector(new HttpRpcOptions
+        {
+            Encryption =
+            {
+                Enabled = true,
+                KeyBase64 = Convert.ToBase64String(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray())
+            }
+        });
     }
 }

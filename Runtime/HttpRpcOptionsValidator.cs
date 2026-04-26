@@ -37,6 +37,7 @@ public static class HttpRpcOptionsValidator
         ValidateObservability(options.Observability, errors);
         ValidateHealthChecks(options.HealthChecks, errors);
         ValidateForwardedHeaders(options.ForwardedHeaders, errors);
+        ValidateEncryption(options.Encryption, errors);
 
         return errors;
     }
@@ -208,6 +209,38 @@ public static class HttpRpcOptionsValidator
             {
                 errors.Add($"ForwardedHeaders.KnownNetworks contains an invalid CIDR entry: {network}");
             }
+        }
+    }
+
+    private static void ValidateEncryption(HttpRpcEncryptionOptions options, ICollection<string> errors)
+    {
+        if (!options.Enabled)
+        {
+            return;
+        }
+
+        if (!string.Equals(options.Algorithm, HttpRpcPayloadProtector.AlgorithmName, StringComparison.OrdinalIgnoreCase))
+        {
+            errors.Add($"Encryption.Algorithm must be {HttpRpcPayloadProtector.AlgorithmName} when encryption is enabled.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.KeyBase64))
+        {
+            errors.Add("Encryption.KeyBase64 is required when encryption is enabled.");
+        }
+        else if (!HttpRpcPayloadProtector.TryDecodeKey(options.KeyBase64, out _))
+        {
+            errors.Add($"Encryption.KeyBase64 must be a valid Base64-encoded {HttpRpcPayloadProtector.KeySizeInBytes}-byte key.");
+        }
+
+        if (string.IsNullOrWhiteSpace(options.EncryptedContentType))
+        {
+            errors.Add("Encryption.EncryptedContentType is required when encryption is enabled.");
+        }
+
+        if (options.DecryptionFailureStatusCode is < 100 or > 999)
+        {
+            errors.Add("Encryption.DecryptionFailureStatusCode must be a valid HTTP status code.");
         }
     }
 }

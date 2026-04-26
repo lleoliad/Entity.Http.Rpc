@@ -21,6 +21,7 @@ public sealed class HttpRpcOptions
     public HttpRpcHealthCheckOptions HealthChecks { get; set; } = new();
     public HttpRpcResponseHeadersOptions ResponseHeaders { get; set; } = new();
     public HttpRpcErrorHandlingOptions ErrorHandling { get; set; } = new();
+    public HttpRpcEncryptionOptions Encryption { get; set; } = new();
 }
 
 /// <summary>
@@ -152,4 +153,16 @@ public sealed class HttpRpcErrorHandlingOptions
 {
     public bool IncludeExceptionDetails { get; set; }
     public bool UseProblemDetails { get; set; } = true;
+}
+
+/// <summary>
+/// Controls optional body-level encryption for HTTP RPC requests and responses.
+/// </summary>
+public sealed class HttpRpcEncryptionOptions
+{
+    public bool Enabled { get; set; }
+    public string Algorithm { get; set; } = "AesGcm";
+    public string? KeyBase64 { get; set; }
+    public string EncryptedContentType { get; set; } = "application/octet-stream";
+    public int DecryptionFailureStatusCode { get; set; } = 400;
 }
