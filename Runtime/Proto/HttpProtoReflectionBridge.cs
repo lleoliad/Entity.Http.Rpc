@@ -4,6 +4,7 @@ using Fantasy;
 using Fantasy.Async;
 using Fantasy.Network;
 using Fantasy.Network.Interface;
+using Fantasy.PacketParser.Interface;
 
 namespace Entities.Http.Rpc;
 
@@ -65,5 +66,53 @@ public sealed class HttpProtoReflectionBridge
         }
 
         await handler(session, rpcId, message);
+    }
+
+    internal async FTask DispatchMessageAsync(MessageDispatcherComponent dispatcher, HttpPseudoClientNetwork network, Session session, uint protocolCode, uint rpcId, object message, Type messageType)
+    {
+        if (ShouldDispatchDirectly(protocolCode))
+        {
+            await DispatchAsync(dispatcher, session, protocolCode, rpcId, message);
+            return;
+        }
+
+        if (message is not IMessage fantasyMessage)
+        {
+            throw new InvalidOperationException($"Fantasy message {messageType.FullName} does not implement {nameof(IMessage)}.");
+        }
+
+        var packInfo = network.CreateOuterPackInfo(rpcId, fantasyMessage, messageType);
+        await DispatchPackInfoAsync(network, session, packInfo);
+    }
+
+    internal async FTask DispatchPacketAsync(MessageDispatcherComponent dispatcher, HttpPseudoClientNetwork network, Session session, HttpProtoPacket packet, Type messageType)
+    {
+        if (ShouldDispatchDirectly(packet.ProtocolCode))
+        {
+            var message = HttpProtoPacketCodec.Deserialize(packet, messageType);
+            await DispatchAsync(dispatcher, session, packet.ProtocolCode, packet.RpcId, message);
+            return;
+        }
+
+        var packInfo = HttpProtoPacketCodec.CreateOuterPackInfo(network, packet);
+        await DispatchPackInfoAsync(network, session, packInfo);
+    }
+
+    private static async FTask DispatchPackInfoAsync(HttpPseudoClientNetwork network, Session session, APackInfo packInfo)
+    {
+        try
+        {
+            await network.NetworkMessageScheduler.Scheduler(session, packInfo);
+        }
+        finally
+        {
+            packInfo.Dispose();
+        }
+    }
+
+    private static bool ShouldDispatchDirectly(uint protocolCode)
+    {
+        OpCodeIdStruct opCodeIdStruct = protocolCode;
+        return opCodeIdStruct.Protocol is OpCodeType.OuterMessage or OpCodeType.OuterRequest;
     }
 }

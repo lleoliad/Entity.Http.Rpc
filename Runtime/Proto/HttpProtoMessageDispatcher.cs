@@ -23,41 +23,44 @@ public sealed class HttpProtoMessageDispatcher
     public async Task<HttpProtoDispatchResult> DispatchAsync(HttpContext httpContext, HttpProtoSessionLease sessionLease, string? routeMessageName, CancellationToken cancellationToken)
     {
         var body = await ReadBodyAsync(httpContext.Request, cancellationToken);
-        var packet = HttpProtoPacketCodec.Parse(body);
+        var packets = HttpProtoPacketCodec.ParseMany(body);
         var dispatcher = _reflectionBridge.GetMessageDispatcher(_scene);
-        var messageType = _reflectionBridge.GetMessageType(dispatcher, packet.ProtocolCode)
-            ?? throw new InvalidOperationException($"Fantasy message type for protocolCode:{packet.ProtocolCode} was not found.");
 
-        if (!string.IsNullOrWhiteSpace(routeMessageName) &&
-            !string.Equals(routeMessageName, messageType.Name, StringComparison.Ordinal))
-        {
-            throw new InvalidOperationException($"Route message name '{routeMessageName}' does not match protocol message '{messageType.Name}'.");
-        }
-
-        var message = HttpProtoPacketCodec.Deserialize(packet, messageType);
-        var isRequest = typeof(IRequest).IsAssignableFrom(messageType);
-
-        // The pseudo network captures anything the Fantasy handler writes back through Session.Send.
+        // The pseudo network captures every packet Fantasy writes back through Session.Send. Returning a
+        // packet stream lets HTTP carry both RPC replies and roaming/route forwarded messages.
         sessionLease.Network.BindRequest(sessionLease.RequestContext);
 
-        await HttpProtoSceneDispatcher.RunAsync(_scene, () => DispatchOnSceneAsync(dispatcher, sessionLease.Session, packet.ProtocolCode, packet.RpcId, message));
+        await HttpProtoSceneDispatcher.RunAsync(_scene, async () =>
+        {
+            foreach (var packet in packets)
+            {
+                var messageType = _reflectionBridge.GetMessageType(dispatcher, packet.ProtocolCode)
+                    ?? throw new InvalidOperationException($"Fantasy message type for protocolCode:{packet.ProtocolCode} was not found.");
 
-        if (!isRequest)
+                if (!string.IsNullOrWhiteSpace(routeMessageName) &&
+                    !string.Equals(routeMessageName, messageType.Name, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException($"Route message name '{routeMessageName}' does not match protocol message '{messageType.Name}'.");
+                }
+
+                var isRequest = typeof(IRequest).IsAssignableFrom(messageType);
+                var responseCount = sessionLease.RequestContext.ResponseCount;
+
+                await _reflectionBridge.DispatchPacketAsync(dispatcher, sessionLease.Network, sessionLease.Session, packet, messageType);
+
+                if (isRequest && sessionLease.RequestContext.ResponseCount == responseCount)
+                {
+                    throw new InvalidOperationException($"Fantasy request handler for protocolCode:{packet.ProtocolCode} did not produce a response packet.");
+                }
+            }
+        });
+
+        if (!sessionLease.RequestContext.HasResponse)
         {
             return HttpProtoDispatchResult.Empty;
         }
 
-        if (!sessionLease.RequestContext.HasResponse)
-        {
-            throw new InvalidOperationException($"Fantasy request handler for protocolCode:{packet.ProtocolCode} did not produce a response packet.");
-        }
-
         return new HttpProtoDispatchResult(true, sessionLease.RequestContext.GetResponseBytes());
-    }
-
-    private async FTask DispatchOnSceneAsync(MessageDispatcherComponent dispatcher, Session session, uint protocolCode, uint rpcId, object message)
-    {
-        await _reflectionBridge.DispatchAsync(dispatcher, session, protocolCode, rpcId, message);
     }
 
     private static async Task<byte[]> ReadBodyAsync(HttpRequest request, CancellationToken cancellationToken)

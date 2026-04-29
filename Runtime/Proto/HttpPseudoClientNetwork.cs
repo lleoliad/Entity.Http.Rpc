@@ -7,7 +7,6 @@ using Fantasy.Network;
 using Fantasy.Network.Interface;
 using Fantasy.PacketParser;
 using Fantasy.Serialize;
-using MemoryPack;
 
 namespace Entities.Http.Rpc;
 
@@ -23,7 +22,9 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
 
     public void InitializeForHttp()
     {
-        Initialize(NetworkType.Client, NetworkProtocolType.TCP, NetworkTarget.Outer);
+        // HTTP requests enter the server as Fantasy outer packets. Initializing as a server-side
+        // outer network gives the pseudo session the same scheduler used by TCP/KCP/WebSocket gates.
+        Initialize(NetworkType.Server, NetworkProtocolType.TCP, NetworkTarget.Outer);
     }
 
     public void BindRequest(HttpProtoRequestContext requestContext)
@@ -70,22 +71,33 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
     {
     }
 
-    private MemoryStreamBuffer PackMessage(uint rpcId, IMessage message, Type messageType)
+    internal OuterPackInfo CreateOuterPackInfo(uint rpcId, IMessage message, Type messageType)
+    {
+        var packInfo = OuterPackInfo.Create(this);
+        packInfo.RpcId = rpcId;
+        packInfo.ProtocolCode = message.OpCode();
+
+        var memoryStream = packInfo.RentMemoryStream(MemoryStreamBufferSource.UnPack);
+        WriteOuterPacket(memoryStream, rpcId, message, messageType);
+        return packInfo;
+    }
+
+    internal MemoryStreamBuffer PackMessage(uint rpcId, IMessage message, Type messageType)
     {
         var memoryStream = MemoryStreamBufferPool.RentMemoryStream(MemoryStreamBufferSource.Pack);
+        WriteOuterPacket(memoryStream, rpcId, message, messageType);
+        return memoryStream;
+    }
+
+    private static void WriteOuterPacket(MemoryStreamBuffer memoryStream, uint rpcId, IMessage message, Type messageType)
+    {
         memoryStream.Seek(Packet.OuterPacketHeadLength, SeekOrigin.Begin);
 
         var opCode = message.OpCode();
         OpCodeIdStruct opCodeIdStruct = opCode;
         var memoryStreamLength = 0;
 
-        if (opCodeIdStruct.OpCodeProtocolType == OpCodeProtocolType.MemoryPack)
-        {
-            var body = MemoryPackSerializer.Serialize(messageType, message);
-            memoryStream.Write(body, 0, body.Length);
-            memoryStreamLength = (int)memoryStream.Position;
-        }
-        else if (SerializerManager.TrySerialize(opCodeIdStruct.OpCodeProtocolType, messageType, message, memoryStream, out var error))
+        if (SerializerManager.TrySerialize(opCodeIdStruct.OpCodeProtocolType, messageType, message, memoryStream, out var error))
         {
             memoryStreamLength = (int)memoryStream.Position;
         }
@@ -116,6 +128,5 @@ public sealed class HttpPseudoClientNetwork : AClientNetwork
         Unsafe.WriteUnaligned(ref Unsafe.Add(ref bufferRef, Packet.OuterPacketRpcIdLocation), rpcId);
 
         message.Dispose();
-        return memoryStream;
     }
 }

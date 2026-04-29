@@ -13,7 +13,7 @@
 - HTTP JSON RPC endpoint backed by Fantasy protocol codes and message dispatch
 - HTTP MessagePack RPC endpoint backed by Fantasy protocol codes and message dispatch
 - HTTP MemoryPack RPC endpoint backed by Fantasy protocol codes and message dispatch
-- HTTP Proto RPC endpoint for binary Fantasy packets
+- HTTP Proto RPC endpoint for binary Fantasy outer packet streams
 - Shared HTTP session bridge for JSON, MessagePack, MemoryPack, and Proto requests
 - Optional AES-GCM body encryption for all HTTP RPC transports
 - Configuration-driven JSON serialization behavior
@@ -125,13 +125,15 @@ Behavior notes:
 
 ## Proto RPC Contract
 
-Proto RPC accepts the binary Fantasy outer packet format on `/http/proto/rpc` and `/http/proto/rpc/{messageName}`.
+Proto RPC accepts one or more concatenated binary Fantasy outer packets on `/http/proto/rpc` and `/http/proto/rpc/{messageName}`.
 
 Behavior notes:
 
 - `Proto.Enabled = false` disables the Proto endpoint and returns `404` for Proto requests.
 - `Proto.EmptyMessageStatusCode` is returned when the dispatched Fantasy message is not an `IRequest`.
 - When `{messageName}` is present, it must match the Fantasy message type resolved from the packet protocol code.
+- Proto responses are returned as a Fantasy outer packet stream, so a single HTTP response can carry the RPC reply plus any route/roaming forwarded messages produced while the request was handled.
+- Route, addressable, roaming, ping, and response protocol kinds are dispatched through Fantasy's own outer network scheduler for maximum framework compatibility.
 
 ## Session Behavior
 

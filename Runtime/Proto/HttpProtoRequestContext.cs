@@ -4,42 +4,55 @@ using Fantasy.Serialize;
 namespace Entities.Http.Rpc;
 
 /// <summary>
-/// Temporary per-request storage for the first response packet written by a Fantasy handler.
+/// Temporary per-request storage for Fantasy packets written by handlers while an HTTP request is active.
 /// </summary>
 public sealed class HttpProtoRequestContext
 {
-    private MemoryStreamBuffer? _responseBuffer;
+    private readonly List<MemoryStreamBuffer> _responseBuffers = [];
 
-    public bool HasResponse => _responseBuffer is not null;
+    public bool HasResponse => _responseBuffers.Count > 0;
+    public int ResponseCount => _responseBuffers.Count;
 
     public ReadOnlyMemory<byte> GetResponseBytes()
     {
-        if (_responseBuffer is null)
+        if (_responseBuffers.Count == 0)
         {
             return ReadOnlyMemory<byte>.Empty;
         }
 
-        return new ReadOnlyMemory<byte>(_responseBuffer.GetBuffer(), 0, (int)_responseBuffer.Position);
+        if (_responseBuffers.Count == 1)
+        {
+            var responseBuffer = _responseBuffers[0];
+            return new ReadOnlyMemory<byte>(responseBuffer.GetBuffer(), 0, (int)responseBuffer.Position);
+        }
+
+        var length = _responseBuffers.Sum(buffer => (int)buffer.Position);
+        var body = new byte[length];
+        var offset = 0;
+
+        foreach (var responseBuffer in _responseBuffers)
+        {
+            var count = (int)responseBuffer.Position;
+            Buffer.BlockCopy(responseBuffer.GetBuffer(), 0, body, offset, count);
+            offset += count;
+        }
+
+        return body;
     }
 
     public bool TryWriteResponse(MemoryStreamBuffer responseBuffer)
     {
-        if (_responseBuffer is not null)
-        {
-            // HTTP RPC expects at most one reply packet per request. Additional writes are discarded so the
-            // ASP.NET Core endpoint can keep a deterministic response contract.
-            responseBuffer.Dispose();
-            Log.Warning("[HTTP] Multiple proto responses were produced for the same HTTP request. The later response was discarded.");
-            return false;
-        }
-
-        _responseBuffer = responseBuffer;
+        _responseBuffers.Add(responseBuffer);
         return true;
     }
 
     public void Clear()
     {
-        _responseBuffer?.Dispose();
-        _responseBuffer = null;
+        foreach (var responseBuffer in _responseBuffers)
+        {
+            responseBuffer.Dispose();
+        }
+
+        _responseBuffers.Clear();
     }
 }

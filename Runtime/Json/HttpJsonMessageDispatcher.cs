@@ -45,7 +45,7 @@ public sealed class HttpJsonMessageDispatcher
         sessionLease.Network.BindRequest(sessionLease.RequestContext);
 
         await HttpProtoSceneDispatcher.RunAsync(_scene, () =>
-            _reflectionBridge.DispatchAsync(dispatcher, sessionLease.Session, envelope.ProtocolCode, envelope.RpcId, message));
+            _reflectionBridge.DispatchMessageAsync(dispatcher, sessionLease.Network, sessionLease.Session, envelope.ProtocolCode, envelope.RpcId, message, messageType));
 
         if (!isRequest)
         {
@@ -57,8 +57,7 @@ public sealed class HttpJsonMessageDispatcher
             throw new InvalidOperationException($"Fantasy request handler for protocolCode:{envelope.ProtocolCode} did not produce a response packet.");
         }
 
-        var responseBody = sessionLease.RequestContext.GetResponseBytes().ToArray();
-        var responsePacket = HttpProtoPacketCodec.Parse(responseBody);
+        var responsePacket = HttpProtoPacketCodec.FindResponsePacket(sessionLease.RequestContext.GetResponseBytes(), envelope.RpcId);
         var responseType = _reflectionBridge.GetMessageType(dispatcher, responsePacket.ProtocolCode)
             ?? throw new InvalidOperationException($"Fantasy message type for protocolCode:{responsePacket.ProtocolCode} was not found.");
         var responseMessage = HttpProtoPacketCodec.Deserialize(responsePacket, responseType);

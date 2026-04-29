@@ -43,6 +43,39 @@ public sealed class HttpJsonRpcInfrastructureTests
     }
 
     [Fact]
+    public void HttpProtoPacketCodec_Should_Parse_Concatenated_Packets()
+    {
+        var first = CreateHeaderOnlyPacket(OuterOpcode.C2G_TestEmptyMessage, 1u);
+        var second = CreateHeaderOnlyPacket(OuterOpcode.C2G_TestRequest, 2u);
+        var body = new byte[first.Length + second.Length];
+        Buffer.BlockCopy(first, 0, body, 0, first.Length);
+        Buffer.BlockCopy(second, 0, body, first.Length, second.Length);
+
+        var packets = HttpProtoPacketCodec.ParseMany(body);
+
+        Assert.Equal(2, packets.Count);
+        Assert.Equal(OuterOpcode.C2G_TestEmptyMessage, packets[0].ProtocolCode);
+        Assert.Equal(1u, packets[0].RpcId);
+        Assert.Equal(OuterOpcode.C2G_TestRequest, packets[1].ProtocolCode);
+        Assert.Equal(2u, packets[1].RpcId);
+    }
+
+    [Fact]
+    public void HttpProtoPacketCodec_Should_Find_Response_By_RpcId_In_Packet_Stream()
+    {
+        var pushedMessage = CreateHeaderOnlyPacket(OuterOpcode.C2G_TestEmptyMessage, 0u);
+        var response = CreateHeaderOnlyPacket(OuterOpcode.C2G_TestRequest, 9u);
+        var body = new byte[pushedMessage.Length + response.Length];
+        Buffer.BlockCopy(pushedMessage, 0, body, 0, pushedMessage.Length);
+        Buffer.BlockCopy(response, 0, body, pushedMessage.Length, response.Length);
+
+        var packet = HttpProtoPacketCodec.FindResponsePacket(body, 9u);
+
+        Assert.Equal(OuterOpcode.C2G_TestRequest, packet.ProtocolCode);
+        Assert.Equal(9u, packet.RpcId);
+    }
+
+    [Fact]
     public void HttpJsonRpcRequestEnvelope_Should_Deserialize_CamelCase_Body()
     {
         const string json = """
@@ -241,5 +274,14 @@ public sealed class HttpJsonRpcInfrastructureTests
                 KeyBase64 = Convert.ToBase64String(Enumerable.Range(0, 32).Select(value => (byte)value).ToArray())
             }
         });
+    }
+
+    private static byte[] CreateHeaderOnlyPacket(uint protocolCode, uint rpcId)
+    {
+        var packetBytes = new byte[Packet.OuterPacketHeadLength];
+        BinaryPrimitives.WriteInt32LittleEndian(packetBytes, -1);
+        BinaryPrimitives.WriteUInt32LittleEndian(packetBytes.AsSpan(Packet.PacketLength, sizeof(uint)), protocolCode);
+        BinaryPrimitives.WriteUInt32LittleEndian(packetBytes.AsSpan(Packet.OuterPacketRpcIdLocation, sizeof(uint)), rpcId);
+        return packetBytes;
     }
 }
