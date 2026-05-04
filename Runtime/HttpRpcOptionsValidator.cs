@@ -29,6 +29,11 @@ public static class HttpRpcOptionsValidator
             return errors;
         }
 
+        if (options.DispatchTimeoutSeconds < 0)
+        {
+            errors.Add("DispatchTimeoutSeconds cannot be negative.");
+        }
+
         ValidateMessagePack(options.MessagePack, errors);
         ValidateMemoryPack(options.MemoryPack, errors);
         ValidateProto(options.Proto, errors);

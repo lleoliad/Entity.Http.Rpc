@@ -10,6 +10,12 @@ public sealed class HttpRpcOptions
     public const string SectionName = "Entity:HttpRpc";
     public const string CorsPolicyName = "EntityHttpRpcCors";
 
+    /// <summary>
+    /// Maximum seconds a dispatch can run before the server cancels it and returns a timeout error.
+    /// Set to 0 to disable (default, backward-compatible).
+    /// </summary>
+    public int DispatchTimeoutSeconds { get; set; }
+
     public HttpRpcJsonOptions Json { get; set; } = new();
     public HttpRpcMessagePackOptions MessagePack { get; set; } = new();
     public HttpRpcMemoryPackOptions MemoryPack { get; set; } = new();

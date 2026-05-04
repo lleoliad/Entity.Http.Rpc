@@ -195,12 +195,21 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         var sessionRegistry = context.RequestServices.GetRequiredService<HttpProtoSessionRegistry>();
         var messageDispatcher = context.RequestServices.GetRequiredService<HttpJsonMessageDispatcher>();
 
+        CancellationTokenSource? timeoutCts = null;
+        var effectiveToken = context.RequestAborted;
+
+        if (options.DispatchTimeoutSeconds > 0)
+        {
+            timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.DispatchTimeoutSeconds));
+            effectiveToken = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeoutCts.Token).Token;
+        }
+
         try
         {
             // JSON and Proto requests intentionally share the same session registry so handlers that rely
             // on the Fantasy Session abstraction behave the same no matter which wire format reached them.
-            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -219,10 +228,18 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         {
             await WriteJsonErrorAsync(context, StatusCodes.Status400BadRequest, exception.Message, null);
         }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            await WriteJsonErrorAsync(context, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+        }
         catch (Exception exception)
         {
             var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
             await WriteJsonErrorAsync(context, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
         }
 
         await FTask.CompletedTask;
@@ -240,10 +257,19 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             return;
         }
 
+        CancellationTokenSource? timeoutCts = null;
+        var effectiveToken = context.RequestAborted;
+
+        if (options.DispatchTimeoutSeconds > 0)
+        {
+            timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.DispatchTimeoutSeconds));
+            effectiveToken = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeoutCts.Token).Token;
+        }
+
         try
         {
-            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -263,10 +289,18 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         {
             await WriteMessagePackErrorAsync(context, options, StatusCodes.Status400BadRequest, exception.Message, null);
         }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            await WriteMessagePackErrorAsync(context, options, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+        }
         catch (Exception exception)
         {
             var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
             await WriteMessagePackErrorAsync(context, options, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
         }
 
         await FTask.CompletedTask;
@@ -284,10 +318,19 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             return;
         }
 
+        CancellationTokenSource? timeoutCts = null;
+        var effectiveToken = context.RequestAborted;
+
+        if (options.DispatchTimeoutSeconds > 0)
+        {
+            timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.DispatchTimeoutSeconds));
+            effectiveToken = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeoutCts.Token).Token;
+        }
+
         try
         {
-            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -308,10 +351,18 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         {
             await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status400BadRequest, exception.Message, null);
         }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+        }
         catch (Exception exception)
         {
             var detail = options.ErrorHandling.IncludeExceptionDetails ? exception.ToString() : null;
             await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status500InternalServerError, "An unexpected error occurred.", detail);
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
         }
 
         await FTask.CompletedTask;
@@ -329,10 +380,19 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             return;
         }
 
+        CancellationTokenSource? timeoutCts = null;
+        var effectiveToken = context.RequestAborted;
+
+        if (options.DispatchTimeoutSeconds > 0)
+        {
+            timeoutCts = new CancellationTokenSource(TimeSpan.FromSeconds(options.DispatchTimeoutSeconds));
+            effectiveToken = CancellationTokenSource.CreateLinkedTokenSource(context.RequestAborted, timeoutCts.Token).Token;
+        }
+
         try
         {
-            await using var sessionLease = await sessionRegistry.AcquireAsync(context, context.RequestAborted);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+            await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
+            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
 
             if (!dispatchResult.HasResponse)
             {
@@ -354,10 +414,19 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             context.Response.StatusCode = StatusCodes.Status400BadRequest;
             await context.Response.WriteAsync(exception.Message, context.RequestAborted);
         }
+        catch (OperationCanceledException) when (!context.RequestAborted.IsCancellationRequested)
+        {
+            context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+            await context.Response.WriteAsync("Server processing timeout.", context.RequestAborted);
+        }
         catch (Exception exception)
         {
             context.Response.StatusCode = StatusCodes.Status500InternalServerError;
             await context.Response.WriteAsync(exception.ToString(), context.RequestAborted);
+        }
+        finally
+        {
+            timeoutCts?.Dispose();
         }
 
         await FTask.CompletedTask;
