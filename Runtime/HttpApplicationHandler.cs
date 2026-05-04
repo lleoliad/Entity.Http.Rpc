@@ -209,7 +209,23 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
             // JSON and Proto requests intentionally share the same session registry so handlers that rely
             // on the Fantasy Session abstraction behave the same no matter which wire format reached them.
             await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
+
+            var dispatchTask = messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (timeoutCts is not null)
+            {
+                // HttpProtoSceneDispatcher.RunAsync uses TaskCompletionSource which does not observe
+                // CancellationToken, so we race the dispatch against a delay instead.
+                var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutCts.Token);
+                var winner = await Task.WhenAny(dispatchTask, delayTask);
+                if (winner == delayTask)
+                {
+                    await WriteJsonErrorAsync(context, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+                    return;
+                }
+            }
+
+            var dispatchResult = await dispatchTask;
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -269,7 +285,21 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         try
         {
             await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
+
+            var dispatchTask = messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (timeoutCts is not null)
+            {
+                var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutCts.Token);
+                var winner = await Task.WhenAny(dispatchTask, delayTask);
+                if (winner == delayTask)
+                {
+                    await WriteMessagePackErrorAsync(context, options, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+                    return;
+                }
+            }
+
+            var dispatchResult = await dispatchTask;
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -330,7 +360,21 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         try
         {
             await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
+
+            var dispatchTask = messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (timeoutCts is not null)
+            {
+                var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutCts.Token);
+                var winner = await Task.WhenAny(dispatchTask, delayTask);
+                if (winner == delayTask)
+                {
+                    await WriteMemoryPackErrorAsync(context, options, StatusCodes.Status504GatewayTimeout, "Server processing timeout.", null);
+                    return;
+                }
+            }
+
+            var dispatchResult = await dispatchTask;
 
             if (!dispatchResult.HasResponse || dispatchResult.ResponseEnvelope is null)
             {
@@ -392,7 +436,22 @@ public sealed class HttpApplicationHandler : AsyncEventSystem<OnConfigureHttpApp
         try
         {
             await using var sessionLease = await sessionRegistry.AcquireAsync(context, effectiveToken);
-            var dispatchResult = await messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, effectiveToken);
+
+            var dispatchTask = messageDispatcher.DispatchAsync(context, sessionLease, routeMessageName, context.RequestAborted);
+
+            if (timeoutCts is not null)
+            {
+                var delayTask = Task.Delay(Timeout.InfiniteTimeSpan, timeoutCts.Token);
+                var winner = await Task.WhenAny(dispatchTask, delayTask);
+                if (winner == delayTask)
+                {
+                    context.Response.StatusCode = StatusCodes.Status504GatewayTimeout;
+                    await context.Response.WriteAsync("Server processing timeout.", context.RequestAborted);
+                    return;
+                }
+            }
+
+            var dispatchResult = await dispatchTask;
 
             if (!dispatchResult.HasResponse)
             {
